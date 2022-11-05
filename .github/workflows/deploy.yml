@@ -1,0 +1,53 @@
+name: Deploy
+
+concurrency:
+  group: deploy/${{ inputs.environment }}
+  cancel-in-progress: true
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      debugging:
+        type: boolean
+      url:
+        type: string
+    secrets:
+      RENDER_SERVICE_ID:
+        required: true
+      RENDER_API_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      debugging:
+        type: boolean
+        description: Enable debug logs
+      environment:
+        type: choice
+        description: Which environment to deploy to?
+        options:
+          - Development
+          - Staging
+          - Production
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.url }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v3.5.1
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Deploy to remote
+        env:
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DEBUG_MODE: ${{ inputs.debugging }}
+        run: node bin/deploy-to-render.mjs

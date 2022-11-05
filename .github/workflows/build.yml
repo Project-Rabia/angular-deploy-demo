@@ -1,0 +1,96 @@
+name: Build
+
+concurrency:
+  group: build/${{ github.ref }}
+  cancel-in-progress: true
+on:
+  push:
+    branches:
+      - main
+      - release/*
+  workflow_dispatch:
+    inputs:
+      debugging:
+        type: boolean
+        description: Enable debug logs
+      skipDeploy:
+        type: boolean
+        description: Skip any deployments?
+jobs:
+  build:
+    name: Build App
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v3.5.1
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Deps
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Store artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Application Build
+          path: dist
+  secrets-gate:
+    runs-on: ubuntu-latest
+    if: inputs.skipDeploy == false
+    env:
+      RELEASE_WINDOW: ${{ secrets.RELEASE_WINDOW }}
+      BRANCH_NAME: ${{ github.ref_name }}
+    outputs:
+      toDevelopment: ${{ steps.check-secrets.outputs.toDevelopment }}
+      toStaging: ${{ steps.check-secrets.outputs.toStaging }}
+      toProduction: ${{ steps.check-secrets.outputs.toProduction }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: check for secrets needed to run demo
+        id: check-secrets
+        run: bash bin/check-secrets.sh
+  deploy-dev:
+    name: Development
+    needs:
+      - build
+      - secrets-gate
+    if: needs.secrets-gate.outputs.toDevelopment == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      debugging: ${{ inputs.debugging || false }}
+      url: https://angular-demo-dev.onrender.com
+      environment: Development
+    secrets:
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+  deploy-staging:
+    name: Staging
+    needs:
+      - build
+      - secrets-gate
+    if: needs.secrets-gate.outputs.toStaging == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      debugging: ${{ inputs.debugging || false }}
+      url: https://angular-demo-staging.onrender.com
+      environment: Staging
+    secrets:
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+  deploy-production:
+    name: Production
+    needs:
+      - deploy-staging
+      - secrets-gate
+    if: needs.secrets-gate.outputs.toProduction == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      debugging: ${{ inputs.debugging || false }}
+      url: https://angular-demo-production.onrender.com
+      environment: Production
+    secrets:
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
