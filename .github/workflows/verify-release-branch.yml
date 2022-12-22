@@ -1,0 +1,15 @@
+name: Verify Release Branch
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - ready_for_review
+jobs:
+  verifyBranch:
+    runs-on: ubuntu-latest
+    env:
+      DESCRIPTION: ${{ context.payload.pull_request.body }}
+    steps:
+      - uses: actions/checkout@v2
+      - run: ./bin/verify-release-branch.sh
