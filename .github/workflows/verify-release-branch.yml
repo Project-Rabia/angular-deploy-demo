@@ -9,7 +9,7 @@ jobs:
   verifyBranch:
     runs-on: ubuntu-latest
     env:
-      DESCRIPTION: ${{ context.payload.pull_request.body }}
+      DESCRIPTION: ${{ github.event.payload.pull_request.body }}
     steps:
       - uses: actions/checkout@v2
       - run: ./bin/verify-release-branch.sh
